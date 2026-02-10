@@ -1,0 +1,47 @@
+{
+  "name": "aztec-ballot",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "engines": {
+    "node": ">=22.0.0"
+  },
+  "scripts": {
+    "clean": "rm -rf app/dist contracts/target contracts/codegenCache.json",
+    "compile-contracts": "cd contracts && mkdir -p target && aztec compile",
+    "codegen-contracts": "cd contracts && aztec codegen target -o target",
+    "copy-artifacts": "mkdir -p app/artifacts && cp contracts/target/*.json contracts/target/*.ts app/artifacts",
+    "build-contracts": "yarn clean && yarn compile-contracts && yarn codegen-contracts && yarn link-test-artifacts && yarn copy-artifacts",
+    "link-test-artifacts": "cp contracts/target/registry-AgentRegistry.json contracts/target/operations-AgentRegistry.json",
+    "test-contracts": "cd contracts && aztec test",
+    "deploy-contracts": "node --experimental-transform-types scripts/deploy.ts",
+    "deploy-production": "PROVER_ENABLED=true node --experimental-transform-types scripts/deploy.ts",
+    "start-production": "PROVER_ENABLED=true && yarn start",
+    "start-clean": "yarn start --fresh",
+    "start": "node --experimental-transform-types scripts/cli-demo.ts"
+  },
+  "dependencies": {
+    "@aztec/accounts": "3.0.0-devnet.6-patch.1",
+    "@aztec/aztec.js": "3.0.0-devnet.6-patch.1",
+    "@aztec/constants": "3.0.0-devnet.6-patch.1",
+    "@aztec/entrypoints": "3.0.0-devnet.6-patch.1",
+    "@aztec/foundation": "3.0.0-devnet.6-patch.1",
+    "@aztec/kv-store": "3.0.0-devnet.6-patch.1",
+    "@aztec/noir-contracts.js": "3.0.0-devnet.6-patch.1",
+    "@aztec/pxe": "3.0.0-devnet.6-patch.1",
+    "@aztec/stdlib": "3.0.0-devnet.6-patch.1",
+    "@aztec/test-wallet": "3.0.0-devnet.6-patch.1",
+    "@aztec/wallet-sdk": "3.0.0-devnet.6-patch.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.15.17",
+    "typescript": "^5.7.3"
+  },
+  "prettier": {
+    "semi": true,
+    "tabWidth": 2,
+    "singleQuote": true,
+    "trailingComma": "es5"
+  },
+  "packageManager": "yarn@1.22.22+sha512.a6b2f7906b721bba3d67d4aff083df04dad64c399707841b7acf00f6b133b7ac24255f2652fa22ae3534329dc6180534e98d17432037ff6fd140556e2bb3137e"
+}
