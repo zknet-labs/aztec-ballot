@@ -2,14 +2,13 @@ import { AztecAddress } from '@aztec/aztec.js/addresses';
 import { getContractInstanceFromInstantiationParams } from '@aztec/aztec.js/contracts';
 import { SponsoredFeePaymentMethod } from '@aztec/aztec.js/fee';
 import { Fr } from '@aztec/aztec.js/fields';
+import { GrumpkinScalar } from '@aztec/foundation/curves/grumpkin';
 import { createAztecNodeClient } from '@aztec/aztec.js/node';
 import type { DeployAccountOptions, Wallet } from '@aztec/aztec.js/wallet';
 import { SPONSORED_FPC_SALT } from '@aztec/constants';
-import { createStore } from '@aztec/kv-store/lmdb';
 import { SponsoredFPCContractArtifact } from '@aztec/noir-contracts.js/SponsoredFPC';
-import { getPXEConfig } from '@aztec/pxe/server';
-import { TestWallet } from '@aztec/test-wallet/server';
-import { readFileSync, writeFileSync, existsSync, mkdirSync, rmSync } from 'fs';
+import { EmbeddedWallet } from '@aztec/wallets/embedded';
+import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
 
@@ -74,12 +73,12 @@ export class FileStorage {
 // ============================================================================
 
 export class CLIWallet {
-  private wallet: TestWallet | null = null;
+  private wallet: EmbeddedWallet | null = null;
   private storage: FileStorage;
   private connectedAddress: AztecAddress | null = null;
   private accounts: Map<string, any> = new Map();
 
-  constructor(wallet: TestWallet, dataDir?: string) {
+  constructor(wallet: EmbeddedWallet, dataDir?: string) {
     this.wallet = wallet;
     this.storage = new FileStorage(dataDir);
   }
@@ -95,24 +94,10 @@ export class CLIWallet {
 
   static async initialize(nodeUrl: string, dataDir?: string) {
     const aztecNode = createAztecNodeClient(nodeUrl);
-    const storeDir = join(homedir(), '.aztec', 'cli-wallet', '.store');
-    
-       //Clear any existing store to prevent synchronization issues with the sandbox
-    if (existsSync(storeDir)) {
-      rmSync(storeDir, { recursive: true, force: true });
-    }
 
-    const store = await createStore('pxe', {
-      dataDirectory: storeDir,
-      dataStoreMapSizeKb: 1e6,
-    });
-
-    const config = getPXEConfig();
-    config.proverEnabled = process.env.PROVER_ENABLED === 'true';
-
-    const wallet = await TestWallet.create(aztecNode, config, {
-      store,
-      useLogSuffix: true,
+    const wallet = await EmbeddedWallet.create(aztecNode, {
+      ephemeral: true,
+      pxeConfig: { proverEnabled: process.env.PROVER_ENABLED === 'true' },
     });
 
     // Register sponsored FPC
@@ -120,7 +105,10 @@ export class CLIWallet {
       SponsoredFPCContractArtifact,
       { salt: new Fr(SPONSORED_FPC_SALT) }
     );
-    await wallet.registerContract(sponsoredInstance, SponsoredFPCContractArtifact);
+    await wallet.registerContract(
+      sponsoredInstance,
+      SponsoredFPCContractArtifact
+    );
 
     return new CLIWallet(wallet, dataDir);
   }
@@ -130,13 +118,17 @@ export class CLIWallet {
 
     const salt = Fr.random();
     const secretKey = Fr.random();
-    const signingKey = Buffer.alloc(32, Fr.random().toBuffer());
+    const signingKey = GrumpkinScalar.random();
 
-    const accountManager = await this.wallet.createECDSARAccount(secretKey, salt, signingKey);
-    
+    const accountManager = await this.wallet.createSchnorrAccount(
+      secretKey,
+      salt,
+      signingKey
+    );
+
     // Register account BEFORE deployment
     await this.registerAccount(accountManager);
-    
+
     // Deploy the account
     const deployMethod = await accountManager.getDeployMethod();
     const sponsoredInstance = await getContractInstanceFromInstantiationParams(
@@ -144,37 +136,38 @@ export class CLIWallet {
       { salt: new Fr(SPONSORED_FPC_SALT) }
     );
 
-    const deployOpts: DeployAccountOptions = {
+    const deployOpts: DeployAccountOptions<{ timeout: number }> = {
       from: AztecAddress.ZERO,
       fee: {
         paymentMethod: new SponsoredFeePaymentMethod(sponsoredInstance.address),
       },
       skipClassPublication: true,
       skipInstancePublication: true,
+      wait: { timeout: 120 },
     };
 
-    await deployMethod.send(deployOpts).wait({ timeout: 120 });
-    
+    await deployMethod.send(deployOpts);
+
     // IMPORTANT: Register the complete address with PXE after deployment
     const completeAddress = await accountManager.getCompleteAddress();
     const pxe = (this.wallet as any).pxe || this.wallet;
     if (pxe.registerRecipient) {
       await pxe.registerRecipient(completeAddress);
     }
-    
+
     // Add to accounts map
     const account = await accountManager.getAccount();
     this.accounts.set(accountManager.address.toString(), account);
-    
+
     // Save to file
     this.storage.saveAccount({
       address: accountManager.address.toString(),
-      signingKey: signingKey.toString('hex'),
+      signingKey: signingKey.toString(),
       secretKey: secretKey.toString(),
       salt: salt.toString(),
-      accountType: 'ecdsa',
+      accountType: 'schnorr',
     });
-    
+
     this.connectedAddress = accountManager.address;
     return accountManager.address;
   }
@@ -197,19 +190,23 @@ export class CLIWallet {
     if (!stored) return null;
 
     const address = AztecAddress.fromString(stored.address);
-    
+
     // If we have stored credentials, recover the account
     if (stored.signingKey && stored.secretKey && stored.salt) {
       try {
         const secretKey = Fr.fromString(stored.secretKey);
         const salt = Fr.fromString(stored.salt);
-        const signingKey = Buffer.from(stored.signingKey, 'hex');
-        
+        const signingKey = GrumpkinScalar.fromString(stored.signingKey);
+
         if (!this.wallet) throw new Error('Wallet not initialized');
-        const accountManager = await this.wallet.createECDSARAccount(secretKey, salt, signingKey);
+        const accountManager = await this.wallet.createSchnorrAccount(
+          secretKey,
+          salt,
+          signingKey
+        );
         const account = await accountManager.getAccount();
         this.accounts.set(address.toString(), account);
-        
+
         // Register the complete address
         const completeAddress = await accountManager.getCompleteAddress();
         const pxe = (this.wallet as any).pxe || this.wallet;
@@ -220,17 +217,17 @@ export class CLIWallet {
         console.warn('Could not recover account from credentials:', error);
       }
     }
-    
+
     // Check if account exists in wallet
     const accounts = await this.wallet.getAccounts();
-    const exists = accounts.find(acc => acc.item.equals(address));
-    
+    const exists = accounts.find((acc) => acc.item.equals(address));
+
     if (exists) {
       this.connectedAddress = address;
       this.accounts.set(address.toString(), address);
       return this.connectedAddress;
     }
-    
+
     return null;
   }
 
@@ -253,10 +250,10 @@ export class CLIWallet {
     this.connectedAddress = null;
   }
 
-   async listWalletAccounts(): Promise<AztecAddress[]> {
+  async listWalletAccounts(): Promise<AztecAddress[]> {
     if (!this.wallet) throw new Error('Wallet not initialized');
     const accounts = await this.wallet.getAccounts();
-    return accounts.map(a => a.item);
+    return accounts.map((a) => a.item);
   }
 
   async connectWalletAccountByIndex(index: number): Promise<AztecAddress> {

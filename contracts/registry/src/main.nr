@@ -6,14 +6,14 @@ pub contract AgentRegistry {
     use aztec::state_vars::{Owned, PrivateSet};
 
     // Note type: a single Field
-    use field_note::field_note::FieldNote;
+    use field_note::FieldNote;
 
     // Note retrieval
     use aztec::note::note_getter_options::NoteGetterOptions;
 
     // Types
-    use aztec::protocol_types::address::AztecAddress;
-    use dep::aztec::protocol_types::traits::ToField;
+    use aztec::protocol::address::AztecAddress;
+    use aztec::protocol::traits::ToField;
 
     // For returning lists
     use std::collections::bounded_vec::BoundedVec;
@@ -32,32 +32,30 @@ pub contract AgentRegistry {
     // External (private) API
     // -------------------------
 
-    /// register_agent(agent: AztecAddress)
     /// Private. Callable by Operator. Stores association note owned by Operator.
     #[external("private")]
     fn register_agent(agent: AztecAddress) {
-        let operator = self.context.msg_sender().unwrap();
+        let operator = self.context.maybe_msg_sender().unwrap();
 
         let note = FieldNote { value: agent.to_field() };
 
         self.storage.associations
             .at(operator)
             .insert(note)
-            .deliver(MessageDelivery.CONSTRAINED_ONCHAIN);
+            .deliver(MessageDelivery.ONCHAIN_CONSTRAINED);
     }
 
-    /// unregister_agent(agent: AztecAddress)
     /// Private. Callable by Operator. Adds a revocation marker note.
     #[external("private")]
     fn unregister_agent(agent: AztecAddress) {
-        let operator = self.context.msg_sender().unwrap();
+        let operator = self.context.maybe_msg_sender().unwrap();
 
         let revoke_note = FieldNote { value: agent.to_field() };
 
         self.storage.revocations
             .at(operator)
             .insert(revoke_note)
-            .deliver(MessageDelivery.CONSTRAINED_ONCHAIN);
+            .deliver(MessageDelivery.ONCHAIN_CONSTRAINED);
     }
 
     /// Private. Succeeds iff register_count > revoke_count for this agent.
@@ -66,10 +64,9 @@ pub contract AgentRegistry {
         let agent_field = agent.to_field();
 
         // Read all association notes for operator
-        let assoc_options = NoteGetterOptions::<FieldNote, 1, Field, Field>::new();
         let assoc_notes = self.storage.associations
             .at(operator)
-            .get_notes::<Field, Field, 1>(assoc_options);
+            .get_notes(NoteGetterOptions::new());
 
         let assoc_len = assoc_notes.len();
         let mut register_count: u32 = 0;
@@ -86,10 +83,9 @@ pub contract AgentRegistry {
         assert(register_count > 0, "Not associated");
 
         // --- Revocation notes for operator ---
-        let rev_options = NoteGetterOptions::<FieldNote, 1, Field, Field>::new();
         let rev_notes = self.storage.revocations
             .at(operator)
-            .get_notes::<Field, Field, 1>(rev_options);
+            .get_notes(NoteGetterOptions::new());
 
         let rev_len = rev_notes.len();
         let mut revoke_count: u32 = 0;
@@ -109,12 +105,11 @@ pub contract AgentRegistry {
 
     #[external("private")]
     fn list_registered_agents_for_operator() -> BoundedVec<Field, 16> {
-        let operator = self.context.msg_sender().unwrap();
+        let operator = self.context.maybe_msg_sender().unwrap();
 
-        let options = NoteGetterOptions::<FieldNote, 1, Field, Field>::new();
         let notes = self.storage.associations
             .at(operator)
-            .get_notes::<Field, Field, 1>(options);
+            .get_notes(NoteGetterOptions::new());
 
         let mut out: BoundedVec<Field, 16> = BoundedVec::new();
         let len = notes.len();
@@ -137,7 +132,7 @@ mod test {
     use crate::AgentRegistry;
 
     use aztec::{
-        protocol_types::address::AztecAddress,
+        protocol::address::AztecAddress,
         test::helpers::test_environment::TestEnvironment,
     };
 

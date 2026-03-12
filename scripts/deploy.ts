@@ -5,16 +5,15 @@ import {
 } from '@aztec/aztec.js/contracts';
 import { SponsoredFeePaymentMethod } from '@aztec/aztec.js/fee';
 import { Fr } from '@aztec/aztec.js/fields';
+import { GrumpkinScalar } from '@aztec/foundation/curves/grumpkin';
 import { PublicKeys } from '@aztec/aztec.js/keys';
 import { createAztecNodeClient } from '@aztec/aztec.js/node';
 import type { DeployAccountOptions, Wallet } from '@aztec/aztec.js/wallet';
 import { type AztecNode } from '@aztec/aztec.js/node';
 import { SPONSORED_FPC_SALT } from '@aztec/constants';
-import { createStore } from '@aztec/kv-store/lmdb';
 import { SponsoredFPCContractArtifact } from '@aztec/noir-contracts.js/SponsoredFPC';
-import { getPXEConfig } from '@aztec/pxe/server';
 import { getDefaultInitializer } from '@aztec/stdlib/abi';
-import { TestWallet } from '@aztec/test-wallet/server';
+import { EmbeddedWallet } from '@aztec/wallets/embedded';
 import { createHash } from 'crypto';
 import fs from 'fs';
 import path from 'path';
@@ -36,7 +35,6 @@ const WRITE_ENV_FILE = process.env.WRITE_ENV_FILE === 'false' ? false : true;
 export const VOTE_START_DELAY_SECONDS = 0;       // open immediately
 export const VOTE_DURATION_SECONDS = 60 * 120;   // 2 hour window
 
-const PXE_STORE_DIR = path.join(import.meta.dirname, '.store');
 const REPO_ROOT = path.resolve(import.meta.dirname, '..');
 export const ENV_FILE_PATH = path.join(REPO_ROOT, '.env');
 
@@ -74,7 +72,7 @@ export function computeArtifactsHash(): string {
       hash.update(fs.readFileSync(filePath));
     }
   }
-  return hash.digest('hex').slice(0, 16); // short hash is sufficient
+  return hash.digest('hex').slice(0, 16);
 }
 
 // ============================================================================
@@ -114,18 +112,14 @@ export async function deployContracts(
 
   // Registry
   console.log('Deploying AgentRegistry...');
-  const registryReceipt = await AgentRegistryContract.deploy(wallet)
-    .send({ fee: feeOpts, from: deployer, contractAddressSalt: registrySalt })
-    .wait({ timeout: 120 });
-  const registry = registryReceipt.contract;
+  const registry = await AgentRegistryContract.deploy(wallet)
+    .send({ fee: feeOpts, from: deployer, contractAddressSalt: registrySalt, wait: { timeout: 120 } });
   console.log(`AgentRegistry deployed at ${registry.address}`);
 
   // Operations
   console.log('Deploying OperationsContract...');
-  const operationsReceipt = await OperationsContract.deploy(wallet, registry.address)
-    .send({ fee: feeOpts, from: deployer, contractAddressSalt: operationsSalt })
-    .wait({ timeout: 120 });
-  const operations = operationsReceipt.contract;
+  const operations = await OperationsContract.deploy(wallet, registry.address)
+    .send({ fee: feeOpts, from: deployer, contractAddressSalt: operationsSalt, wait: { timeout: 120 } });
   console.log(`Operations deployed at ${operations.address}`);
 
   // Voting
@@ -133,12 +127,10 @@ export async function deployContracts(
   console.log(`  Vote start delay: ${startDelay}s`);
   console.log(`  Vote duration:    ${duration / 60} min`);
 
-  const votingReceipt = await PrivateVotingContract.deploy(
+  const voting = await PrivateVotingContract.deploy(
     wallet, deployer, operations.address, startDelay, duration,
   )
-    .send({ fee: feeOpts, from: deployer, contractAddressSalt: votingSalt })
-    .wait({ timeout: 120 });
-  const voting = votingReceipt.contract;
+    .send({ fee: feeOpts, from: deployer, contractAddressSalt: votingSalt, wait: { timeout: 120 } });
   console.log(`PrivateVoting deployed at ${voting.address}`);
 
   return {
@@ -182,29 +174,18 @@ export function writeEnvFile(
 // Standalone execution (only runs when this file is executed directly)
 // ============================================================================
 
-async function setupWallet(aztecNode: AztecNode) {
-  fs.rmSync(PXE_STORE_DIR, { recursive: true, force: true });
-
-  const store = await createStore('pxe', {
-    dataDirectory: PXE_STORE_DIR,
-    dataStoreMapSizeKb: 1e6,
-  });
-
-  const config = getPXEConfig();
-  config.dataDirectory = 'pxe';
-  config.proverEnabled = PROVER_ENABLED;
-
-  return await TestWallet.create(aztecNode, config, {
-    store,
-    useLogSuffix: true,
+async function setupWallet(aztecNode: AztecNode): Promise<EmbeddedWallet> {
+  return await EmbeddedWallet.create(aztecNode, {
+    ephemeral: true,
+    pxeConfig: { proverEnabled: PROVER_ENABLED },
   });
 }
 
-async function createAccount(wallet: TestWallet) {
+async function createAccount(wallet: EmbeddedWallet) {
   const salt = Fr.random();
   const secretKey = Fr.random();
-  const signingKey = Buffer.alloc(32, Fr.random().toBuffer());
-  const accountManager = await wallet.createECDSARAccount(
+  const signingKey = GrumpkinScalar.random();
+  const accountManager = await wallet.createSchnorrAccount(
     secretKey,
     salt,
     signingKey,
@@ -212,15 +193,16 @@ async function createAccount(wallet: TestWallet) {
 
   const deployMethod = await accountManager.getDeployMethod();
   const sponsoredPFCContract = await getSponsoredPFCContract();
-  const deployOpts: DeployAccountOptions = {
+  const deployOpts: DeployAccountOptions<{ timeout: number }> = {
     from: AztecAddress.ZERO,
     fee: {
       paymentMethod: new SponsoredFeePaymentMethod(sponsoredPFCContract.address),
     },
     skipClassPublication: true,
     skipInstancePublication: true,
+    wait: { timeout: 120 },
   };
-  await deployMethod.send(deployOpts).wait({ timeout: 120 });
+  await deployMethod.send(deployOpts);
 
   return accountManager.address;
 }
@@ -240,8 +222,6 @@ async function main() {
   if (WRITE_ENV_FILE) {
     writeEnvFile(deploymentInfo);
   }
-
-  fs.rmSync(PXE_STORE_DIR, { recursive: true, force: true });
 }
 
 // Only run main() when executed directly, not when imported

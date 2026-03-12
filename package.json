@@ -7,7 +7,7 @@
     "node": ">=22.0.0"
   },
   "scripts": {
-    "clean": "rm -rf app/dist contracts/target contracts/codegenCache.json",
+    "clean": "rm -rf app/dist contracts/target contracts/codegenCache.json contracts/registry/target contracts/operations/target contracts/voting/target",
     "compile-contracts": "cd contracts && mkdir -p target && aztec compile",
     "codegen-contracts": "cd contracts && aztec codegen target -o target",
     "copy-artifacts": "mkdir -p app/artifacts && cp contracts/target/*.json contracts/target/*.ts app/artifacts",
@@ -22,17 +22,16 @@
     "test-e2e": "NON_INTERACTIVE=true node --experimental-transform-types scripts/cli-demo.ts"
   },
   "dependencies": {
-    "@aztec/accounts": "3.0.0-devnet.6-patch.1",
-    "@aztec/aztec.js": "3.0.0-devnet.6-patch.1",
-    "@aztec/constants": "3.0.0-devnet.6-patch.1",
-    "@aztec/entrypoints": "3.0.0-devnet.6-patch.1",
-    "@aztec/foundation": "3.0.0-devnet.6-patch.1",
-    "@aztec/kv-store": "3.0.0-devnet.6-patch.1",
-    "@aztec/noir-contracts.js": "3.0.0-devnet.6-patch.1",
-    "@aztec/pxe": "3.0.0-devnet.6-patch.1",
-    "@aztec/stdlib": "3.0.0-devnet.6-patch.1",
-    "@aztec/test-wallet": "3.0.0-devnet.6-patch.1",
-    "@aztec/wallet-sdk": "3.0.0-devnet.6-patch.1"
+    "@aztec/accounts": "4.0.0-devnet.2-patch.1",
+    "@aztec/aztec.js": "4.0.0-devnet.2-patch.1",
+    "@aztec/constants": "4.0.0-devnet.2-patch.1",
+    "@aztec/entrypoints": "4.0.0-devnet.2-patch.1",
+    "@aztec/foundation": "4.0.0-devnet.2-patch.1",
+    "@aztec/noir-contracts.js": "4.0.0-devnet.2-patch.1",
+    "@aztec/pxe": "4.0.0-devnet.2-patch.1",
+    "@aztec/stdlib": "4.0.0-devnet.2-patch.1",
+    "@aztec/wallet-sdk": "4.0.0-devnet.2-patch.1",
+    "@aztec/wallets": "4.0.0-devnet.2-patch.1"
   },
   "devDependencies": {
     "@types/node": "^22.15.17",

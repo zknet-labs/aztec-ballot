@@ -373,8 +373,7 @@ async function operatorRegisterAgent(): Promise<void> {
 
     const receipt = await registry.methods
       .register_agent(agentAddr)
-      .send({ from: operator, ...(await sponsoredFee()) })
-      .wait();
+      .send({ from: operator, ...(await sponsoredFee()), wait: { timeout: 120 } });
 
     log(`✓ Agent registered`, colors.green);
     log(`  txHash: ${receipt.txHash}\n`, colors.cyan);
@@ -396,8 +395,7 @@ async function operatorUnregisterAgent(): Promise<void> {
 
     const receipt = await registry.methods
       .unregister_agent(agentAddr)
-      .send({ from: operator, ...(await sponsoredFee()) })
-      .wait();
+      .send({ from: operator, ...(await sponsoredFee()), wait: { timeout: 120 } });
 
     log(`✓ Agent unregistered`, colors.green);
     log(`  txHash: ${receipt.txHash}\n`, colors.cyan);
@@ -455,8 +453,7 @@ async function operatorIssueVoteInstruction(): Promise<void> {
 
     const receipt = await ops.methods
       .issue_vote_instruction(agentAddr, candidate)
-      .send({ from: operator, ...(await sponsoredFee()) })
-      .wait();
+      .send({ from: operator, ...(await sponsoredFee()), wait: { timeout: 120 } });
 
     log(`✓ Vote instruction issued to agent!`, colors.green);
     log(`  Candidate: ${candidate}`, colors.cyan);
@@ -525,8 +522,7 @@ async function agentExecuteVote(): Promise<void> {
 
     const receipt = await voting.methods
       .cast_vote()
-      .send({ from: agent, ...(await sponsoredFee()) })
-      .wait();
+      .send({ from: agent, ...(await sponsoredFee()), wait: { timeout: 120 } });
 
     log(`✓ Vote executed on-chain!`, colors.green);
     log(`  txHash: ${receipt.txHash}`, colors.cyan);
@@ -587,8 +583,7 @@ async function adminEndVoteEarly(): Promise<void> {
     log('Submitting end_vote tx...', colors.yellow);
     const receipt = await voting.methods
       .end_vote()
-      .send({ from: admin, ...(await sponsoredFee()) })
-      .wait();
+      .send({ from: admin, ...(await sponsoredFee()), wait: { timeout: 120 } });
 
     log(`✓ Vote ended by admin!`, colors.green);
     log(`  txHash: ${receipt.txHash}`, colors.cyan);

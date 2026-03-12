@@ -1,18 +1,18 @@
-use dep::aztec::macros::aztec;
+use aztec::macros::aztec;
 
 #[aztec]
 pub contract PrivateVoting {
-    use dep::aztec::{
+    use aztec::{
         keys::getters::get_public_keys,
         macros::{functions::{external, initializer, only_self}, storage::storage},
     };
-    use dep::aztec::protocol_types::{
+    use aztec::protocol::{
         address::AztecAddress,
         hash::poseidon2_hash,
         traits::{Hash, ToField},
     };
-    use dep::aztec::state_vars::{Map, PublicImmutable, PublicMutable};
-    use dep::aztec::context::utility_context::UtilityContext;
+    use aztec::state_vars::{Map, PublicImmutable, PublicMutable};
+    use aztec::context::UtilityContext;
 
     use operations::Operations;
 
@@ -45,24 +45,20 @@ pub contract PrivateVoting {
 
     #[external("private")]
     fn cast_vote() {
-        let agent: AztecAddress = self.context.msg_sender().unwrap();
+        let agent: AztecAddress = self.context.maybe_msg_sender().unwrap();
         let operations_addr: AztecAddress = self.storage.operations_contract.read();
 
-        // Single cross-contract call: consumes instruction, returns candidate
         let candidate: Field = self.call(
             Operations::at(operations_addr).consume_vote_instruction(agent)
         );
 
-        // Nullifier so agent can only vote once
         let npk_hash = get_public_keys(agent).npk_m.hash();
-        let secret = self.context.request_nsk_app(npk_hash);
+        let secret = self.context.request_nhk_app(npk_hash);
         let nullifier = poseidon2_hash([agent.to_field(), secret]);
         self.context.push_nullifier(nullifier);
 
-        // Tally (only candidate goes public)
         self.enqueue_self.add_to_tally_public(candidate);
 
-        // Mark agent as having voted (public announcement)
         self.enqueue(Operations::at(operations_addr)._mark_voted_public(agent));
     }
 
@@ -85,13 +81,12 @@ pub contract PrivateVoting {
     #[external("public")]
     fn end_vote() {
         assert(
-            self.storage.admin.read().eq(self.msg_sender().unwrap()),
+            self.storage.admin.read().eq(self.msg_sender()),
             "Only admin can end votes",
         );
         self.storage.vote_ended.write(true);
     }
 
-    /// Returns the vote count, only after voting has ended (deadline passed OR admin ended early).
     #[external("utility")]
     unconstrained fn get_vote(candidate: Field) -> pub Field {
         let ended: bool = self.storage.vote_ended.read();
@@ -103,7 +98,6 @@ pub contract PrivateVoting {
         self.storage.tally.at(candidate).read()
     }
 
-    /// Returns true if voting has ended (deadline passed OR admin ended early).
     #[external("utility")]
     unconstrained fn is_vote_finished() -> pub bool {
         if self.storage.vote_ended.read() {

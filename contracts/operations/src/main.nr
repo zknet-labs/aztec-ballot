@@ -6,11 +6,11 @@ pub contract Operations {
 
     use aztec::state_vars::{Map, Owned, PrivateSet, PublicMutable, PublicImmutable};
 
-    use aztec::protocol_types::address::AztecAddress;
+    use aztec::protocol::address::AztecAddress;
 
     use aztec::note::note_getter_options::NoteGetterOptions;
 
-    use field_note::field_note::FieldNote;
+    use field_note::FieldNote;
 
     use aztec::messages::message_delivery::MessageDelivery;
 
@@ -52,7 +52,7 @@ pub contract Operations {
     #[external("private")]
     fn configure_agent_registration(agent: AztecAddress, is_registered: bool) {
         let registry_addr = self.storage.registry.read();
-        let operator = self.context.msg_sender().unwrap();
+        let operator = self.context.maybe_msg_sender().unwrap();
 
         let _ = self.call(
             AgentRegistry::at(registry_addr).prove_association_for(operator, agent)
@@ -64,12 +64,12 @@ pub contract Operations {
             self.storage.auth_notes
                 .at(agent)
                 .insert(capability)
-                .deliver(MessageDelivery.UNCONSTRAINED_ONCHAIN);
+                .deliver(MessageDelivery.ONCHAIN_UNCONSTRAINED);
         } else {
             self.storage.revocations
                 .at(agent)
                 .insert(capability)
-                .deliver(MessageDelivery.UNCONSTRAINED_ONCHAIN);
+                .deliver(MessageDelivery.ONCHAIN_UNCONSTRAINED);
         }
     }
 
@@ -81,7 +81,7 @@ pub contract Operations {
     #[external("private")]
     fn issue_vote_instruction(agent: AztecAddress, candidate: Field) {
         let registry_addr: AztecAddress = self.storage.registry.read();
-        let operator: AztecAddress = self.context.msg_sender().unwrap();
+        let operator: AztecAddress = self.context.maybe_msg_sender().unwrap();
 
         let _: () = self.call(
             AgentRegistry::at(registry_addr).prove_association_for(operator, agent)
@@ -91,7 +91,7 @@ pub contract Operations {
         self.storage.vote_instructions
             .at(agent)
             .insert(instruction)
-            .deliver(MessageDelivery.UNCONSTRAINED_ONCHAIN);
+            .deliver(MessageDelivery.ONCHAIN_UNCONSTRAINED);
     }
 
     // -------------------------
@@ -103,10 +103,9 @@ pub contract Operations {
     /// Double-voting is prevented by the nullifier in PrivateVoting.
     #[external("private")]
     fn consume_vote_instruction(agent: AztecAddress) -> Field {
-        let options: NoteGetterOptions<FieldNote, 1, Field, Field> = NoteGetterOptions::new();
         let instructions = self.storage.vote_instructions
             .at(agent)
-            .get_notes::<Field, Field, 1>(options);
+            .get_notes(NoteGetterOptions::new());
 
         assert(instructions.len() > 0, "No vote instruction from operator");
 
@@ -135,7 +134,7 @@ mod test {
     use crate::Operations;
 
     use aztec::test::helpers::test_environment::TestEnvironment;
-    use aztec::protocol_types::address::AztecAddress;
+    use aztec::protocol::address::AztecAddress;
 
     use registry::AgentRegistry;
 
