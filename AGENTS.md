@@ -194,6 +194,42 @@ fee payment (SponsoredFPC). No native tokens needed.
 AZTEC_NODE_URL=http://my-node:8080 yarn start
 ```
 
+### Non-interactive / E2E test mode
+
+**Requires the local network to be running.** Set `NON_INTERACTIVE=true` to run the full
+happy-path sequence without any user input:
+
+```bash
+yarn test-e2e
+```
+
+This is equivalent to running `NON_INTERACTIVE=true node --experimental-transform-types scripts/cli-demo.ts`.
+
+The sequence executed is:
+
+1. Register agent (option 1)
+2. View agent status (option 6)
+3. Issue vote instruction — auto-selects **candidate 1** (option 3)
+4. Agent executes vote — **auto-waits** if window is not yet open (option 4)
+5. End vote early — **auto-confirms** (option 5)
+6. View vote results (option 7)
+7. View voting window (option 8)
+8. Unregister agent (option 2)
+
+All auto-answered prompts are logged with an `[auto]` prefix so CI output remains readable.
+
+The `NON_INTERACTIVE` flag works with any other env vars (`AZTEC_NODE_URL`, `FORCE_FRESH`, etc.):
+
+```bash
+yarn start-clean NON_INTERACTIVE=true   # force fresh deploy + e2e run
+```
+
+or equivalently:
+
+```bash
+NON_INTERACTIVE=true yarn start --fresh
+```
+
 ---
 
 ## Production / Proofs
@@ -285,6 +321,7 @@ app/
 | `AZTEC_NODE_URL`              | `http://localhost:8080` | Aztec node endpoint                                    |
 | `PROVER_ENABLED`              | `false`                 | Enable ZK proof generation                             |
 | `WRITE_ENV_FILE`              | `true`                  | Persist deployment info to `.env`                      |
+| `NON_INTERACTIVE`             | `false`                 | Run CLI demo non-interactively (e2e test mode)         |
 | `REGISTRY_CONTRACT_ADDRESS`   | —                       | Set by deploy; read by CLI demo                        |
 | `OPERATIONS_CONTRACT_ADDRESS` | —                       | Set by deploy; read by CLI demo                        |
 | `VOTING_CONTRACT_ADDRESS`     | —                       | Set by deploy; read by CLI demo                        |
@@ -315,7 +352,7 @@ Copy `.env.example` to `.env` to pre-populate (or let `yarn deploy-contracts` wr
 ## Pull Requests
 
 - Commit messages should be concise and describe _why_, not just _what_.
-- State which tests were run (TXE unit tests, CLI demo, or both).
+- State which tests were run (TXE unit tests, `yarn test-e2e`, CLI demo, or some combination).
 - Do not commit generated artifacts (`app/artifacts/`, `contracts/target/`).
 - Do not commit `.env` (contains deployment addresses that are environment-specific).
 - Do not change `aztec-version.txt` without coordinating a full version upgrade.
