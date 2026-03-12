@@ -18,7 +18,8 @@
     "deploy-production": "PROVER_ENABLED=true node --experimental-transform-types scripts/deploy.ts",
     "start-production": "PROVER_ENABLED=true && yarn start",
     "start-clean": "yarn start --fresh",
-    "start": "node --experimental-transform-types scripts/cli-demo.ts"
+    "start": "node --experimental-transform-types scripts/cli-demo.ts",
+    "test-e2e": "NON_INTERACTIVE=true node --experimental-transform-types scripts/cli-demo.ts"
   },
   "dependencies": {
     "@aztec/accounts": "3.0.0-devnet.6-patch.1",

@@ -51,14 +51,17 @@ const log = (msg: string, color: string = colors.reset) =>
 
 const rl = readline.createInterface({ input: process.stdin, output: process.stdout });
 
-const question = (prompt: string): Promise<string> =>
-  new Promise(resolve => rl.question(`${colors.cyan}${prompt}${colors.reset}`, resolve));
+const question = (prompt: string, nonInteractiveDefault: string = ''): Promise<string> =>
+  NON_INTERACTIVE
+    ? (log(`[auto] ${prompt}${nonInteractiveDefault}`, colors.yellow), Promise.resolve(nonInteractiveDefault))
+    : new Promise(resolve => rl.question(`${colors.cyan}${prompt}${colors.reset}`, resolve));
 
 const short = (addr?: AztecAddress) => (addr ? `${addr.toString().slice(0, 10)}...` : '—');
 
 const sleep = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 const FORCE_FRESH = process.argv.includes('--fresh');
+const NON_INTERACTIVE = process.env.NON_INTERACTIVE === 'true';
 
 // ============================================================================
 // Repo root
@@ -438,7 +441,7 @@ async function operatorIssueVoteInstruction(): Promise<void> {
   log(`Target agent: ${short(agentAddr)}`, colors.cyan);
   log('Candidates: 1, 2, 3, 4, 5\n', colors.cyan);
 
-  const candidateStr = await question('Select candidate (1-5): ');
+  const candidateStr = await question('Select candidate (1-5): ', '1');
   const candidate = parseInt(candidateStr.trim());
 
   if (isNaN(candidate) || candidate < 1 || candidate > 5) {
@@ -500,7 +503,7 @@ async function agentExecuteVote(): Promise<void> {
     }
 
     if (current < start) {
-      const proceed = (await question('Window not open yet. Wait for it? (y/n): ')).trim().toLowerCase();
+      const proceed = (await question('Window not open yet. Wait for it? (y/n): ', 'y')).trim().toLowerCase();
       if (proceed !== 'y') {
         log('Cancelled.', colors.yellow);
         return;
@@ -575,7 +578,7 @@ async function adminEndVoteEarly(): Promise<void> {
       return;
     }
 
-    const confirm = (await question('End voting now? Results will become visible. (y/n): ')).trim().toLowerCase();
+    const confirm = (await question('End voting now? Results will become visible. (y/n): ', 'y')).trim().toLowerCase();
     if (confirm !== 'y') {
       log('Cancelled.', colors.yellow);
       return;
@@ -726,6 +729,27 @@ async function viewVotingWindow(): Promise<void> {
 }
 
 // ============================================================================
+// Non-interactive E2E sequence
+// ============================================================================
+
+async function runE2ESequence(): Promise<void> {
+  log('\n========== NON-INTERACTIVE E2E SEQUENCE ==========', colors.bright);
+  log('Running full happy-path: register → status → issue → vote → end → results → window → unregister', colors.yellow);
+  log('(All prompts auto-answered. Set NON_INTERACTIVE=true to enable this mode.)\n', colors.yellow);
+
+  await operatorRegisterAgent();        // 1. Register agent
+  await viewAgentStatus();              // 6. View agent status
+  await operatorIssueVoteInstruction(); // 3. Issue vote instruction (auto: candidate 1)
+  await agentExecuteVote();             // 4. Execute vote (auto-wait if window not open)
+  await adminEndVoteEarly();            // 5. End vote early (auto-confirm)
+  await viewVoteResults();              // 7. View vote results
+  await viewVotingWindow();             // 8. View voting window
+  await operatorUnregisterAgent();      // 2. Unregister agent
+
+  log('\n✓ E2E sequence complete.\n', colors.green);
+}
+
+// ============================================================================
 // Single menu
 // ============================================================================
 
@@ -777,9 +801,13 @@ async function main() {
   try {
     await initialize();
 
-    let running = true;
-    while (running) {
-      running = await mainMenu();
+    if (NON_INTERACTIVE) {
+      await runE2ESequence();
+    } else {
+      let running = true;
+      while (running) {
+        running = await mainMenu();
+      }
     }
 
     log('\nGoodbye!\n', colors.green);
