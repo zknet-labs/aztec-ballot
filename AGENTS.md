@@ -20,13 +20,14 @@ PrivateVoting (private → public tally).
 
 ## Aztec Version
 
-The pinned version lives in **`aztec-version.txt`** (currently `3.0.0-devnet.6-patch.1`).
+The pinned version lives in **`.aztecrc`** (currently `4.0.0-devnet.2-patch.1`).
+This is the native upstream convention used by `aztec-up use`.
 
 Every version-bearing file must agree with it:
 
 | File                              | Field                              |
 | --------------------------------- | ---------------------------------- |
-| `aztec-version.txt`               | Canonical source of truth          |
+| `.aztecrc`                        | Canonical source of truth          |
 | `package.json`                    | All `@aztec/*` dependency versions |
 | `contracts/registry/Nargo.toml`   | `tag=` in aztec + field_note deps  |
 | `contracts/operations/Nargo.toml` | `tag=` in aztec + field_note deps  |
@@ -60,17 +61,24 @@ yarn install
 Aztec node version, which requires restarting the local network.
 
 ```bash
-# Read the version from aztec-version.txt, then:
+# Reads the version from .aztecrc, then installs/switches and syncs deps:
 bash scripts/setup_install.sh
 ```
 
 The setup script:
 
-1. Detects OS/shell and sets `ROOTLESS=true`
-2. Runs `aztec-up` to install/switch the toolchain to the pinned version
-3. Rewrites all `@aztec/*` versions in `package.json`
-4. Rewrites all `tag=` references in `contracts/*/Nargo.toml`
-5. Sources the updated shell rc file
+1. Detects OS/shell
+2. Reads the pinned version from `.aztecrc`
+3. Runs `aztec-up install <version>` to install and activate the pinned version
+4. Rewrites all `@aztec/*` versions in `package.json`
+5. Rewrites all `tag=` references in `contracts/*/Nargo.toml`
+6. Sources the updated shell rc file if needed
+
+On a fresh machine where `aztec-up` is not yet installed, the script bootstraps with:
+
+```
+VERSION=<version> bash -i <(curl -sL https://install.aztec.network/<version>)
+```
 
 ---
 
@@ -289,7 +297,7 @@ yarn start-production     # run demo with PROVER_ENABLED=true
 ## Project Structure
 
 ```
-aztec-version.txt              # Pinned Aztec version — single source of truth
+.aztecrc                       # Pinned Aztec version — single source of truth
 package.json                   # Node deps + yarn scripts
 tsconfig.json                  # TypeScript config (ES2022, ESNext, Bundler resolution)
 contracts/
@@ -355,4 +363,4 @@ Copy `.env.example` to `.env` to pre-populate (or let `yarn deploy-contracts` wr
 - State which tests were run (TXE unit tests, `yarn test-e2e`, CLI demo, or some combination).
 - Do not commit generated artifacts (`app/artifacts/`, `contracts/target/`).
 - Do not commit `.env` (contains deployment addresses that are environment-specific).
-- Do not change `aztec-version.txt` without coordinating a full version upgrade.
+- Do not change `.aztecrc` without coordinating a full version upgrade.

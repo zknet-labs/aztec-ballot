@@ -562,4 +562,4 @@ unconstrained fn get_pending_instruction_count(agent: AztecAddress) -> pub u32 {
 
 ---
 
-*Aztec-Ballot — built on Aztec v3.0.0-devnet.6-patch.1*
+*Aztec-Ballot — built on Aztec v4.0.0-devnet.2-patch.1*

@@ -5,8 +5,7 @@ A privacy-first delegated voting system built on the [Aztec Network](https://azt
 ## Prerequisites
 
 - **Node.js** ≥ 22.0
-- **Docker Desktop** (for Aztec sandbox / local network)
-- **Aztec toolchain** (installed via setup script)
+- **Aztec toolchain** (installed via setup script — no Docker required)
 - Works on **macOS** (zsh/bash) and **Linux** (bash/zsh)
 - Works on top of the local network, but can be adapted to work with a testnet
 
@@ -14,7 +13,7 @@ A privacy-first delegated voting system built on the [Aztec Network](https://azt
 
 ### 1. Run the Setup Script
 
-The setup script handles everything: Docker security, Aztec toolchain installation, version syncing, and dependency management. It can be run from any directory.
+The setup script handles Aztec toolchain installation, version syncing, and dependency management. It can be run from any directory.
 
 ```bash
 bash scripts/setup_install.sh
@@ -23,15 +22,10 @@ bash scripts/setup_install.sh
 **What the setup script does:**
 
 1. **OS & shell detection** — detects macOS/Linux and zsh/bash, uses the correct rc file
-2. **Docker check** — verifies Docker is installed and running (platform-specific guidance)
-3. **Mount security** — restricts Docker file access to your project directory (not `$HOME`)
-4. **ROOTLESS env** — sets `ROOTLESS=true` in your shell rc file
-5. **Version detection** — reads `aztec-version.txt` from project root
-6. **Toolchain install/update** — runs `aztec-up` to match the project version
-7. **Dependency sync** — updates all `@aztec/*` versions in `package.json` and all `tag=` references in `contracts/*/Nargo.toml` to match `aztec-version.txt`
-8. **Security patches** — restricts Docker mount paths and configures nargo cache
-9. **Docker Desktop config** — guides you through file sharing settings (skipped on native Linux Docker Engine)
-10. **Auto-reload** — sources your shell rc file automatically if it was modified
+2. **Version detection** — reads `.aztecrc` from project root (native `aztec-up` convention)
+3. **Toolchain install/update** — runs `aztec-up install <version>` to match the project version; bootstraps `aztec-up` itself on fresh machines using `VERSION=<version> bash -i <(curl -sL https://install.aztec.network/<version>)`
+4. **Dependency sync** — updates all `@aztec/*` versions in `package.json` and all `tag=` references in `contracts/*/Nargo.toml` to match `.aztecrc`
+5. **Auto-reload** — sources your shell rc file automatically if it was modified
 
 ### 2. Start the Aztec Sandbox
 
@@ -170,7 +164,7 @@ AZTEC_NODE_URL=http://custom-node:8080 yarn start
 
 ## Updating the Aztec Version
 
-1. Edit `aztec-version.txt` with the new version
+1. Edit `.aztecrc` with the new version
 2. Re-run the setup script:
 
 ```bash
@@ -178,7 +172,7 @@ bash scripts/setup_install.sh
 ```
 
 The script will:
-- Update the Aztec toolchain via `aztec-up`
+- Install/switch the Aztec toolchain via `aztec-up install <version>`
 - Rewrite all `@aztec/*` versions in `package.json`
 - Rewrite all `tag=` references in `contracts/*/Nargo.toml`
 - Auto-reload your shell config
@@ -205,7 +199,7 @@ yarn build-contracts
 ## Project Structure
 
 ```
-aztec-version.txt           # Pinned Aztec version
+.aztecrc                    # Pinned Aztec version (native aztec-up convention)
 package.json                # Node deps + scripts
 contracts/
   Nargo.toml                # Workspace (registry, operations, voting)
