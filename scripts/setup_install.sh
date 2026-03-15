@@ -46,6 +46,7 @@ Linux) PLATFORM="linux" ;;
   ;;
 esac
 
+
 # Detect the user's login shell and corresponding rc file
 USER_SHELL="$(basename "${SHELL:-/bin/bash}")"
 case "$USER_SHELL" in
@@ -56,6 +57,17 @@ bash) SHELL_RC="$HOME/.bashrc" ;;
   USER_SHELL="sh"
   ;;
 esac
+
+# macOS: Check for Xcode Command Line Tools before proceeding
+if [ "$PLATFORM" = "macos" ]; then
+  if ! xcode-select -p &>/dev/null; then
+    error "Xcode Command Line Tools are not installed."
+    echo ""
+    echo "Please install them first by running: xcode-select --install"
+    echo "Then re-run this setup script."
+    exit 1
+  fi
+fi
 
 RC_MODIFIED=false
 
@@ -116,6 +128,14 @@ function install_or_update_aztec() {
       if [[ "$update" =~ ^[Yy]$ ]]; then
         info "Running: aztec-up install $AZTEC_VERSION"
         aztec-up install "$AZTEC_VERSION"
+        # Remove 'shopt: inherit_errexit' from .bin/aztec if on macOS
+        if [ "$PLATFORM" = "macos" ]; then
+          AZTEC_BIN="$HOME/.aztec/current/node_modules/@aztec/aztec/scripts/aztec.sh"
+          if [ -f "$AZTEC_BIN" ]; then
+            sed -i '' '/shopt: inherit_errexit/d' "$AZTEC_BIN"
+            success "Patched $AZTEC_BIN to remove 'shopt: inherit_errexit' (macOS workaround)"
+          fi
+        fi
         success "Switched to $AZTEC_VERSION"
       else
         warn "Skipping version switch. The project may not work correctly."
@@ -133,6 +153,14 @@ function install_or_update_aztec() {
       success "Aztec $AZTEC_VERSION installed successfully"
       # shellcheck disable=SC1090
       source "$SHELL_RC" 2>/dev/null || true
+      # Remove 'shopt: inherit_errexit' from .bin/aztec if on macOS
+      if [ "$PLATFORM" = "macos" ]; then
+        AZTEC_BIN="$HOME/.aztec/current/node_modules/@aztec/aztec/scripts/aztec.sh"
+        if [ -f "$AZTEC_BIN" ]; then
+          sed -i '' '/shopt: inherit_errexit/d' "$AZTEC_BIN"
+          success "Patched $AZTEC_BIN to remove 'shopt: inherit_errexit' (macOS workaround)"
+        fi
+      fi
     else
       error "Aztec installation failed"
       exit 1
