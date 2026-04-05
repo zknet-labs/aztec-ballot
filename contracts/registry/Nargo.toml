@@ -3,5 +3,5 @@ name = "registry"
 type = "contract"
 
 [dependencies]
-aztec = { git = "https://github.com/AztecProtocol/aztec-nr/", tag = "v4.0.0-devnet.2-patch.1", directory = "aztec" }
-field_note = { git = "https://github.com/AztecProtocol/aztec-nr/", tag = "v4.0.0-devnet.2-patch.1", directory = "field-note" }
+aztec = { git = "https://github.com/AztecProtocol/aztec-nr/", tag = "v4.2.0-aztecnr-rc.2", directory = "aztec" }
+field_note = { git = "https://github.com/AztecProtocol/aztec-nr/", tag = "v4.2.0-aztecnr-rc.2", directory = "field-note" }

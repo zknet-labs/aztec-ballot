@@ -1,4 +1,5 @@
 import { AztecAddress } from '@aztec/aztec.js/addresses';
+import { NO_FROM } from '@aztec/aztec.js/account';
 import {
   DeployMethod,
   getContractInstanceFromInstantiationParams,
@@ -112,13 +113,13 @@ export async function deployContracts(
 
   // Registry
   console.log('Deploying AgentRegistry...');
-  const registry = await AgentRegistryContract.deploy(wallet)
+  const { contract: registry } = await AgentRegistryContract.deploy(wallet)
     .send({ fee: feeOpts, from: deployer, contractAddressSalt: registrySalt, wait: { timeout: 120 } });
   console.log(`AgentRegistry deployed at ${registry.address}`);
 
   // Operations
   console.log('Deploying OperationsContract...');
-  const operations = await OperationsContract.deploy(wallet, registry.address)
+  const { contract: operations } = await OperationsContract.deploy(wallet, registry.address)
     .send({ fee: feeOpts, from: deployer, contractAddressSalt: operationsSalt, wait: { timeout: 120 } });
   console.log(`Operations deployed at ${operations.address}`);
 
@@ -127,7 +128,7 @@ export async function deployContracts(
   console.log(`  Vote start delay: ${startDelay}s`);
   console.log(`  Vote duration:    ${duration / 60} min`);
 
-  const voting = await PrivateVotingContract.deploy(
+  const { contract: voting } = await PrivateVotingContract.deploy(
     wallet, deployer, operations.address, startDelay, duration,
   )
     .send({ fee: feeOpts, from: deployer, contractAddressSalt: votingSalt, wait: { timeout: 120 } });
@@ -194,7 +195,7 @@ async function createAccount(wallet: EmbeddedWallet) {
   const deployMethod = await accountManager.getDeployMethod();
   const sponsoredPFCContract = await getSponsoredPFCContract();
   const deployOpts: DeployAccountOptions<{ timeout: number }> = {
-    from: AztecAddress.ZERO,
+    from: NO_FROM,
     fee: {
       paymentMethod: new SponsoredFeePaymentMethod(sponsoredPFCContract.address),
     },

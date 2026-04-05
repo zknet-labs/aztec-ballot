@@ -283,15 +283,18 @@ async function getVotingWindowStatus(caller: AztecAddress): Promise<{
   endedEarly: boolean;
 }> {
   const voting = PrivateVotingContract.at(votingAddr, getAccountWallet());
-  const start = Number(await voting.methods.get_start_timestamp().simulate({ from: caller }));
-  const deadline = Number(await voting.methods.get_deadline_timestamp().simulate({ from: caller }));
-  const finished = await voting.methods.is_vote_finished().simulate({ from: caller });
+  const { result: start } = await voting.methods.get_start_timestamp().simulate({ from: caller });
+  const { result: deadline } = await voting.methods.get_deadline_timestamp().simulate({ from: caller });
+  const { result: finished } = await voting.methods.is_vote_finished().simulate({ from: caller });
+
+  const startNum = Number(start);
+  const deadlineNum = Number(deadline);
 
   // If finished but we're still before the deadline, admin ended it early
   const currentTime = await getCurrentTimestamp();
-  const endedEarly = finished && currentTime <= deadline;
+  const endedEarly = finished && currentTime <= deadlineNum;
 
-  return { start, deadline, endedEarly };
+  return { start: startNum, deadline: deadlineNum, endedEarly };
 }
 
 function formatWindowStatus(currentTime: number, start: number, deadline: number, endedEarly: boolean = false): string {
@@ -371,7 +374,7 @@ async function operatorRegisterAgent(): Promise<void> {
     const registry = AgentRegistryContract.at(registryAddr, getAccountWallet());
     log('Submitting tx...', colors.yellow);
 
-    const receipt = await registry.methods
+    const { receipt } = await registry.methods
       .register_agent(agentAddr)
       .send({ from: operator, ...(await sponsoredFee()), wait: { timeout: 120 } });
 
@@ -393,7 +396,7 @@ async function operatorUnregisterAgent(): Promise<void> {
     const registry = AgentRegistryContract.at(registryAddr, getAccountWallet());
     log('Submitting tx...', colors.yellow);
 
-    const receipt = await registry.methods
+    const { receipt } = await registry.methods
       .unregister_agent(agentAddr)
       .send({ from: operator, ...(await sponsoredFee()), wait: { timeout: 120 } });
 
@@ -451,7 +454,7 @@ async function operatorIssueVoteInstruction(): Promise<void> {
     const ops = OperationsContract.at(operationsAddr, getAccountWallet());
     log('Submitting vote instruction tx...', colors.yellow);
 
-    const receipt = await ops.methods
+    const { receipt } = await ops.methods
       .issue_vote_instruction(agentAddr, candidate)
       .send({ from: operator, ...(await sponsoredFee()), wait: { timeout: 120 } });
 
@@ -520,7 +523,7 @@ async function agentExecuteVote(): Promise<void> {
     const voting = PrivateVotingContract.at(votingAddr, getAccountWallet());
     log('Submitting vote tx...', colors.yellow);
 
-    const receipt = await voting.methods
+    const { receipt } = await voting.methods
       .cast_vote()
       .send({ from: agent, ...(await sponsoredFee()), wait: { timeout: 120 } });
 
@@ -543,7 +546,7 @@ async function agentExecuteVote(): Promise<void> {
       // Sandbox often swallows assertion messages — check vote state to give a better error
       try {
         const voting = PrivateVotingContract.at(votingAddr, getAccountWallet());
-        const finished = await voting.methods.is_vote_finished().simulate({ from: agent });
+        const { result: finished } = await voting.methods.is_vote_finished().simulate({ from: agent });
         if (finished) {
           log('✗ Vote has already ended (ended early by admin or deadline passed).', colors.red);
         } else {
@@ -568,7 +571,7 @@ async function adminEndVoteEarly(): Promise<void> {
     const voting = PrivateVotingContract.at(votingAddr, getAccountWallet());
 
     // Check if already ended
-    const finished = await voting.methods.is_vote_finished().simulate({ from: admin });
+    const { result: finished } = await voting.methods.is_vote_finished().simulate({ from: admin });
     if (finished) {
       log('Vote has already ended.', colors.yellow);
       return;
@@ -581,7 +584,7 @@ async function adminEndVoteEarly(): Promise<void> {
     }
 
     log('Submitting end_vote tx...', colors.yellow);
-    const receipt = await voting.methods
+    const { receipt } = await voting.methods
       .end_vote()
       .send({ from: admin, ...(await sponsoredFee()), wait: { timeout: 120 } });
 
@@ -605,7 +608,7 @@ async function viewAgentStatus(): Promise<void> {
   // 1. Check has_voted (public)
   try {
     const ops = OperationsContract.at(operationsAddr, getAccountWallet());
-    const hasVoted = await ops.methods.get_has_voted(agentAddr).simulate({ from: getConnectedAddress() });
+    const { result: hasVoted } = await ops.methods.get_has_voted(agentAddr).simulate({ from: getConnectedAddress() });
     log(`  Has Voted    : ${hasVoted ? '✅ Yes' : '❌ No'}`, hasVoted ? colors.green : colors.yellow);
   } catch {
     log(`  Has Voted    : ❓ Unknown`, colors.yellow);
@@ -662,7 +665,7 @@ async function viewVoteResults(): Promise<void> {
     const voting = PrivateVotingContract.at(votingAddr, getAccountWallet());
 
     // Check if voting is finished (contract-level check)
-    const finished = await voting.methods.is_vote_finished().simulate({ from: caller });
+    const { result: finished } = await voting.methods.is_vote_finished().simulate({ from: caller });
     if (!finished) {
       const { start, deadline, endedEarly } = await getVotingWindowStatus(caller);
       const current = await getCurrentTimestamp();
@@ -678,7 +681,7 @@ async function viewVoteResults(): Promise<void> {
     let totalVotes = 0;
 
     for (let i = 1; i <= 5; i++) {
-      const count = await voting.methods.get_vote(i).simulate({ from: caller });
+      const { result: count } = await voting.methods.get_vote(i).simulate({ from: caller });
       results[i] = Number(count);
       totalVotes += results[i];
     }

@@ -1,3 +1,4 @@
+import { NO_FROM } from '@aztec/aztec.js/account';
 import { AztecAddress } from '@aztec/aztec.js/addresses';
 import { getContractInstanceFromInstantiationParams } from '@aztec/aztec.js/contracts';
 import { SponsoredFeePaymentMethod } from '@aztec/aztec.js/fee';
@@ -137,7 +138,7 @@ export class CLIWallet {
     );
 
     const deployOpts: DeployAccountOptions<{ timeout: number }> = {
-      from: AztecAddress.ZERO,
+      from: NO_FROM,
       fee: {
         paymentMethod: new SponsoredFeePaymentMethod(sponsoredInstance.address),
       },
