@@ -108,8 +108,8 @@ function loadEnvFromRepoRoot(): Record<string, string> {
 // ============================================================================
 
 function needsFreshDeploy(envVars: Record<string, string>): { needed: boolean; reason: string } {
-  if (FORCE_FRESH) {
-    return { needed: true, reason: '--fresh flag provided' };
+  if (FORCE_FRESH || NON_INTERACTIVE) {
+    return { needed: true, reason: '--fresh flag provided or running in e2e mode' };
   }
 
   // No .env or missing addresses → need deploy
