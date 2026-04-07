@@ -109,6 +109,51 @@ function get_aztec_version() {
   success "Project Aztec version: $AZTEC_VERSION"
 }
 
+function find_aztec_wrapper_scripts() {
+  find "$HOME/.aztec" -path '*/node_modules/@aztec/aztec/scripts/aztec.sh' -type f 2>/dev/null || true
+}
+
+function patch_aztec_mac_wrapper() {
+  if [ "$PLATFORM" != "macos" ]; then
+    return
+  fi
+
+  while IFS= read -r aztec_bin; do
+    if [ -f "$aztec_bin" ] && grep -q 'shopt -s inherit_errexit' "$aztec_bin"; then
+      sed -i '' '/shopt -s inherit_errexit/d' "$aztec_bin"
+      success "Patched $aztec_bin to remove 'shopt -s inherit_errexit' (macOS workaround)"
+    fi
+  done < <(find_aztec_wrapper_scripts)
+}
+
+function get_active_aztec_version() {
+  if ! command -v aztec &>/dev/null; then
+    echo "unknown"
+    return
+  fi
+
+  VERSION_OUTPUT=$(aztec --version 2>&1 || true)
+  ACTIVE_VERSION=$(printf '%s\n' "$VERSION_OUTPUT" | grep -Eo '[0-9][0-9A-Za-z.-]*' | head -1 || true)
+
+  if [ -z "$ACTIVE_VERSION" ] && [ -d "$HOME/.aztec/current" ]; then
+    CURRENT_AZTEC_DIR=$(cd "$HOME/.aztec/current" 2>/dev/null && pwd -P || true)
+    if [[ "$CURRENT_AZTEC_DIR" == "$HOME/.aztec/versions/"* ]]; then
+      ACTIVE_VERSION="$(basename "$CURRENT_AZTEC_DIR")"
+    fi
+  fi
+
+  echo "${ACTIVE_VERSION:-unknown}"
+}
+
+function get_local_nargo_version() {
+  if ! command -v nargo &>/dev/null; then
+    echo "not-installed"
+    return
+  fi
+
+  nargo --version 2>/dev/null | head -1 | awk '{print $4}' || echo "unknown"
+}
+
 function install_or_update_aztec() {
   echo ""
   info "Checking Aztec installation..."
@@ -116,7 +161,9 @@ function install_or_update_aztec() {
   if command -v aztec-up &>/dev/null; then
     info "aztec-up is already installed."
 
-    CURRENT_VERSION=$(aztec --version 2>/dev/null | grep -o '[0-9][^ ]*' | head -1 || echo "unknown")
+    patch_aztec_mac_wrapper
+
+    CURRENT_VERSION=$(get_active_aztec_version)
     info "Active aztec version: $CURRENT_VERSION"
 
     if [ "$CURRENT_VERSION" = "$AZTEC_VERSION" ]; then
@@ -128,14 +175,7 @@ function install_or_update_aztec() {
       if [[ "$update" =~ ^[Yy]$ ]]; then
         info "Running: aztec-up install $AZTEC_VERSION"
         aztec-up install "$AZTEC_VERSION"
-        # Remove 'shopt: inherit_errexit' from .bin/aztec if on macOS
-        if [ "$PLATFORM" = "macos" ]; then
-          AZTEC_BIN="$HOME/.aztec/current/node_modules/@aztec/aztec/scripts/aztec.sh"
-          if [ -f "$AZTEC_BIN" ]; then
-            sed -i '' '/shopt: inherit_errexit/d' "$AZTEC_BIN"
-            success "Patched $AZTEC_BIN to remove 'shopt: inherit_errexit' (macOS workaround)"
-          fi
-        fi
+        patch_aztec_mac_wrapper
         success "Switched to $AZTEC_VERSION"
       else
         warn "Skipping version switch. The project may not work correctly."
@@ -153,14 +193,7 @@ function install_or_update_aztec() {
       success "Aztec $AZTEC_VERSION installed successfully"
       # shellcheck disable=SC1090
       source "$SHELL_RC" 2>/dev/null || true
-      # Remove 'shopt: inherit_errexit' from .bin/aztec if on macOS
-      if [ "$PLATFORM" = "macos" ]; then
-        AZTEC_BIN="$HOME/.aztec/current/node_modules/@aztec/aztec/scripts/aztec.sh"
-        if [ -f "$AZTEC_BIN" ]; then
-          sed -i '' '/shopt: inherit_errexit/d' "$AZTEC_BIN"
-          success "Patched $AZTEC_BIN to remove 'shopt: inherit_errexit' (macOS workaround)"
-        fi
-      fi
+      patch_aztec_mac_wrapper
     else
       error "Aztec installation failed"
       exit 1
@@ -197,13 +230,13 @@ function sync_project_dependencies() {
   NARGO_UPDATED=0
 
   for toml in $(find "$PROJECT_ROOT/contracts" -name "Nargo.toml" -not -path "*/target/*"); do
-    if grep -q 'tag=' "$toml"; then
-      CURRENT_TAG=$(grep -m1 'tag=' "$toml" | sed 's/.*tag="\([^"]*\)".*/\1/')
+      if grep -Eq 'tag[[:space:]]*=' "$toml"; then
+        CURRENT_TAG=$(grep -Em1 'tag[[:space:]]*=' "$toml" | sed -E 's/.*tag[[:space:]]*=[[:space:]]*"([^"]*)".*/\1/')
       if [ "$CURRENT_TAG" = "$NARGO_TAG" ]; then
         continue
       fi
       info "Updating $(basename $(dirname "$toml"))/Nargo.toml: $CURRENT_TAG → $NARGO_TAG"
-      sed -i.bak -E "s/tag=\"[^\"]+\"/tag=\"${NARGO_TAG}\"/g" "$toml"
+        sed -i.bak -E "s/tag[[:space:]]*=[[:space:]]*\"[^\"]+\"/tag = \"${NARGO_TAG}\"/g" "$toml"
       rm -f "${toml}.bak"
       NARGO_UPDATED=$((NARGO_UPDATED + 1))
     fi
@@ -228,12 +261,12 @@ function show_version_info() {
   echo "  📦 Aztec: $AZTEC_VERSION"
 
   if command -v aztec &>/dev/null; then
-    ACTIVE=$(aztec --version 2>/dev/null | head -1 || echo "unknown")
+    ACTIVE=$(get_active_aztec_version)
     echo "  ✅ Active aztec: $ACTIVE"
   fi
 
   if command -v nargo &>/dev/null; then
-    LOCAL_NARGO=$(nargo --version 2>/dev/null | head -1 | awk '{print $4}' || echo "unknown")
+    LOCAL_NARGO=$(get_local_nargo_version)
     echo "  🔧 Nargo (local): $LOCAL_NARGO"
   else
     echo "  🔧 Nargo (local): Not installed"
@@ -242,6 +275,8 @@ function show_version_info() {
 }
 
 function summary() {
+  LOCAL_NARGO=$(get_local_nargo_version)
+
   echo ""
   echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
   success "Setup Complete!"
@@ -262,6 +297,11 @@ function summary() {
   echo "  3. aztec start --local-network  — start local testnet (separate terminal)"
   echo "  4. yarn deploy-contracts        — deploy contracts"
   echo "  5. yarn start                   — run the CLI demo"
+  if [ "$LOCAL_NARGO" = "not-installed" ]; then
+    echo "  6. IDE Noir version             — install Noir via noirup, then point your IDE to that nargo binary"
+  else
+    echo "  6. IDE Noir version             — use Noir/Nargo $LOCAL_NARGO in your IDE to match this toolchain"
+  fi
   echo ""
   echo "To switch Aztec version in future:"
   echo "  1. Edit .aztecrc with the new version"
